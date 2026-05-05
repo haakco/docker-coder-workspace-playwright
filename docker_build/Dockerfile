@@ -66,8 +66,11 @@ set -euo pipefail
 PREFIX="${HOME}/.local"
 mkdir -p "${PREFIX}/bin"
 
-echo "==> npm install --prefix ${PREFIX} -g @google/gemini-cli @openai/codex"
-npm install --prefix "${PREFIX}" -g @google/gemini-cli @openai/codex
+# Explicit --registry so the install routes through the HaakCo Verdaccio cache
+# even if the user has a ~/.npmrc that overrides /etc/npmrc.
+REGISTRY="https://verdaccio.k8.haak.co/"
+echo "==> npm install --prefix ${PREFIX} --registry ${REGISTRY} -g @google/gemini-cli @openai/codex"
+npm install --prefix "${PREFIX}" --registry "${REGISTRY}" -g @google/gemini-cli @openai/codex
 
 echo "==> claude update"
 claude update || echo "  (claude update returned non-zero; check manually)"
