@@ -23,7 +23,7 @@ permissions:
 jobs:
   build_and_push:
     name: Build and push workspace-playwright image
-    runs-on: self-hosted
+    runs-on: [self-hosted, haakco]
     concurrency:
       group: "coder-workspace-playwright:${{ github.ref_name }}"
       cancel-in-progress: true
@@ -72,9 +72,9 @@ jobs:
       - name: Build and push Docker image
         run: |
           # Build tag arguments from metadata output
-          TAG_ARGS=""
+          TAG_ARGS=()
           while IFS= read -r tag; do
-            [ -n "$tag" ] && TAG_ARGS="$TAG_ARGS --tag $tag"
+            [ -n "$tag" ] && TAG_ARGS+=(--tag "$tag")
           done <<< "$DOCKER_TAGS"
 
           docker buildx build \
@@ -83,7 +83,7 @@ jobs:
             --file ./docker_build/Dockerfile \
             --build-arg BASE_IMAGE_NAME=ghcr.io/haakco/coder-workspace \
             --build-arg BASE_IMAGE_VERSION=latest \
-            $TAG_ARGS \
+            "${TAG_ARGS[@]}" \
             .
         env:
           DOCKER_TAGS: ${{ steps.meta.outputs.tags }}
