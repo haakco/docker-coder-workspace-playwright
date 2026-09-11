@@ -11,12 +11,21 @@ on:
       - '.github/workflows/build_docker.yml'
     tags:
       - "v*"
+  pull_request:
+    paths:
+      - 'docker_build/**'
+      - '.github/workflows/build_docker.yml'
   schedule:
     # Offset from docker-coder-workspace (20:30 Sun), -php (20:45 Sun), and
     # -vorrent (21:00 Sun) so the base rebuilds first and the playwright
     # extender picks up any new base layers.
     - cron: '15 21 * * 0'
   workflow_dispatch:
+    inputs:
+      check_only:
+        description: Build and smoke-test without pushing
+        type: boolean
+        default: false
 permissions:
   contents: read
   packages: write
@@ -69,7 +78,36 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build (check only, no push)
+        if: ${{ github.event_name == 'pull_request' || inputs.check_only == true }}
+        run: |
+          docker buildx build \
+            --pull \
+            --load \
+            --file ./docker_build/Dockerfile \
+            --build-arg BASE_IMAGE_NAME=ghcr.io/haakco/coder-workspace \
+            --build-arg BASE_IMAGE_VERSION=latest \
+            --cache-from type=registry,ref=ghcr.io/haakco/coder-workspace-playwright:buildcache \
+            --tag docker-coder-workspace-playwright:check \
+            .
+
+      - name: Smoke test
+        if: ${{ github.event_name == 'pull_request' || inputs.check_only == true }}
+        run: |
+          docker run --rm --entrypoint bash docker-coder-workspace-playwright:check -c '
+            set -e
+            node --version
+            corepack --version
+            pi --version
+            npx --yes playwright --version
+            test -d /ms-playwright
+            test -n "$(ls -A /ms-playwright)"
+            test -f /etc/coder-skel/.pi/agent/settings.json
+            echo SMOKE_OK
+          '
+
       - name: Build and push Docker image
+        if: ${{ github.event_name != 'pull_request' && inputs.check_only != true }}
         run: |
           # Build tag arguments from metadata output
           TAG_ARGS=()
@@ -83,6 +121,8 @@ jobs:
             --file ./docker_build/Dockerfile \
             --build-arg BASE_IMAGE_NAME=ghcr.io/haakco/coder-workspace \
             --build-arg BASE_IMAGE_VERSION=latest \
+            --cache-from type=registry,ref=ghcr.io/haakco/coder-workspace-playwright:buildcache \
+            --cache-to type=registry,ref=ghcr.io/haakco/coder-workspace-playwright:buildcache,mode=max \
             "${TAG_ARGS[@]}" \
             .
         env:
