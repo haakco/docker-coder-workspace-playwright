@@ -27,9 +27,12 @@ USER root
 
 # Install Playwright globally and its browsers + OS-level deps. `--with-deps`
 # pulls every apt package the browsers need (libnss3, libgtk, libasound, etc).
+# The browser CDN is intermittently flaky, so retry the download a few times.
 RUN npm install -g "playwright@${PLAYWRIGHT_VERSION}" \
     && mkdir -p "${PLAYWRIGHT_BROWSERS_PATH}" \
-    && npx --yes playwright install --with-deps chromium firefox webkit \
+    && (npx --yes playwright install --with-deps chromium firefox webkit \
+        || (sleep 15 && npx --yes playwright install --with-deps chromium firefox webkit) \
+        || (sleep 30 && npx --yes playwright install --with-deps chromium firefox webkit)) \
     && chown -R 1000:1000 "${PLAYWRIGHT_BROWSERS_PATH}" \
     && chmod -R u+rwx,go+rx "${PLAYWRIGHT_BROWSERS_PATH}" \
     && npm cache clean --force \
