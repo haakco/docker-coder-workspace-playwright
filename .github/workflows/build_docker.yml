@@ -104,6 +104,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request' || inputs.check_only == true }}
         run: |
           docker buildx build --builder haakco-buildkit \
+            --secret id=github_token,env=HAAKCO_GITHUB_TOKEN \
             --pull \
             --load \
             --file ./docker_build/Dockerfile \
@@ -138,6 +139,7 @@ jobs:
           done <<< "$DOCKER_TAGS"
 
           docker buildx build --builder haakco-buildkit \
+            --secret id=github_token,env=HAAKCO_GITHUB_TOKEN \
             --pull \
             --push \
             --file ./docker_build/Dockerfile \
