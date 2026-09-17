@@ -92,4 +92,22 @@ RUN chmod +x /usr/local/bin/llmUpdate
 
 USER coder
 WORKDIR /home/coder
+
+# Smoke assertions, moved out of CI and into the build so they run on the shared BuildKit for
+# both the PR path and the publish path: an image can no longer be published without them.
+# Verbatim from the retired `Smoke test` workflow step, including its `set -e` - a heredoc RUN
+# is executed through `sh -c`, so without it the trailing echo would mask any earlier failure.
+# Runs as `coder` and from `WORKDIR`, matching what `docker run` validated before.
+RUN <<'EOF'
+set -e
+node --version
+corepack --version
+pi --version
+npx --yes playwright --version
+test -d /ms-playwright
+test -n "$(ls -A /ms-playwright)"
+test -f /etc/coder-skel/.pi/agent/settings.json
+echo SMOKE_OK
+EOF
+
 ENTRYPOINT ["/usr/local/bin/workspace-entrypoint.sh"]

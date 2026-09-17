@@ -38,6 +38,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
     concurrency:
       group: "coder-workspace-playwright:${{ github.ref_name }}"
       cancel-in-progress: true
@@ -113,28 +114,12 @@ jobs:
           docker buildx build \
             --secret id=github_token,env=HAAKCO_GITHUB_TOKEN \
             --pull \
-            --load \
+            --output type=cacheonly \
             --file ./docker_build/Dockerfile \
             --build-arg BASE_IMAGE_NAME=ghcr.io/haakco/coder-workspace \
             --build-arg BASE_IMAGE_VERSION=latest \
             --cache-from type=registry,ref=ghcr.io/haakco/coder-workspace-playwright:buildcache \
-            --tag docker-coder-workspace-playwright:check \
             .
-
-      - name: Smoke test
-        if: ${{ github.event_name == 'pull_request' || inputs.check_only == true }}
-        run: |
-          docker run --rm --entrypoint bash docker-coder-workspace-playwright:check -c '
-            set -e
-            node --version
-            corepack --version
-            pi --version
-            npx --yes playwright --version
-            test -d /ms-playwright
-            test -n "$(ls -A /ms-playwright)"
-            test -f /etc/coder-skel/.pi/agent/settings.json
-            echo SMOKE_OK
-          '
 
       - name: Build and push Docker image
         if: ${{ github.event_name != 'pull_request' && inputs.check_only != true }}
@@ -159,3 +144,8 @@ jobs:
         shell: bash
         env:
           DOCKER_TAGS: ${{ steps.meta.outputs.tags }}
+
+      # The smoke assertions that used to run here as a separate post-build step now execute
+      # inside the image build itself: see the smoke RUN at the end of docker_build/Dockerfile.
+      # The containerd lane has no Docker daemon, and running them in the build makes them cover
+      # the publish path too, so an image can no longer be published without them.
