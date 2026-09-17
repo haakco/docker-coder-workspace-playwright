@@ -83,27 +83,24 @@ jobs:
       #
       # The dind bridge in the runner pod is MTU 1500 while the pod network is 1450,
       # so packets larger than 1450 bytes are black-holed inside build containers:
-      # bulk transfers stall and then reset after roughly 150s. Measured here - the
+      # bulk transfers stall and then reset after roughly 150s. Measured here, the
       # same GitHub fetch that hung for 80s inside dind completed in 2.4s on the
-      # cluster BuildKit, which runs on the cluster's own network. The endpoint is
-      # derived from the pod's own namespace, so it follows the runner lane, and
-      # buildkitd-ingress allows every lane's pods (app.kubernetes.io/part-of =
-      # github-actions-runners) to reach it.
+      # cluster BuildKit, which sits on the cluster's own network.
       #
-      # An unreachable builder fails the build rather than silently falling back to
-      # dind, which would reintroduce exactly that flakiness.
+      # The script and the values it reads come from the runner, not from this repo:
+      # terraform sets BUILDX_BUILDER_NAME and BUILDX_CLUSTER_ENDPOINTS from the
+      # BuildKit service it creates, and the script selects that builder with --use.
+      # That is why the build steps below name no --builder and why adding a second
+      # BuildKit replica needs no change here.
       - name: Register the cluster BuildKit builder
         run: |
           set -euo pipefail
-          endpoint="tcp://buildkitd.${NAMESPACE}.svc.cluster.local:1234"
-          echo "BuildKit endpoint: $endpoint"
-          docker buildx create --name haakco-buildkit --driver remote "$endpoint" >/dev/null 2>&1 || true
-          docker buildx inspect --bootstrap haakco-buildkit
+          /home/runner/buildx-cluster/setup-buildx-cluster.sh
 
       - name: Build (check only, no push)
         if: ${{ github.event_name == 'pull_request' || inputs.check_only == true }}
         run: |
-          docker buildx build --builder haakco-buildkit \
+          docker buildx build \
             --secret id=github_token,env=HAAKCO_GITHUB_TOKEN \
             --pull \
             --load \
@@ -138,7 +135,7 @@ jobs:
             [ -n "$tag" ] && TAG_ARGS+=(--tag "$tag")
           done <<< "$DOCKER_TAGS"
 
-          docker buildx build --builder haakco-buildkit \
+          docker buildx build \
             --secret id=github_token,env=HAAKCO_GITHUB_TOKEN \
             --pull \
             --push \
