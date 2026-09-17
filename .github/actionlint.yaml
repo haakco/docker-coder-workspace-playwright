@@ -1,5 +1,4 @@
 ---
 self-hosted-runner:
   labels:
-    - self-hosted
-    - haakco
+    - haakco-build

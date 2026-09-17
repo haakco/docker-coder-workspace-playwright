@@ -32,7 +32,12 @@ permissions:
 jobs:
   build_and_push:
     name: Build and push workspace-playwright image
-    runs-on: [self-hosted, haakco]
+    runs-on: haakco-build
+    container:
+      image: ghcr.io/haakco/actions-runner:1
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     concurrency:
       group: "coder-workspace-playwright:${{ github.ref_name }}"
       cancel-in-progress: true
@@ -95,7 +100,12 @@ jobs:
       - name: Register the cluster BuildKit builder
         run: |
           set -euo pipefail
-          /home/runner/buildx-cluster/setup-buildx-cluster.sh
+          # setup-buildx.sh ships on PATH in the runner image. The path this replaced,
+          # /home/runner/buildx-cluster/setup-buildx-cluster.sh, is a ConfigMap that only the
+          # DinD lane mounts (terraform/tf-home/032_github_actions/040_runner_config.tf), so it
+          # does not exist on the containerd lane.
+          setup-buildx.sh
+        shell: bash
 
       - name: Build (check only, no push)
         if: ${{ github.event_name == 'pull_request' || inputs.check_only == true }}
@@ -146,5 +156,6 @@ jobs:
             --cache-to type=registry,ref=ghcr.io/haakco/coder-workspace-playwright:buildcache,mode=max \
             "${TAG_ARGS[@]}" \
             .
+        shell: bash
         env:
           DOCKER_TAGS: ${{ steps.meta.outputs.tags }}
