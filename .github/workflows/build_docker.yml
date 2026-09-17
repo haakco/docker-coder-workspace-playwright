@@ -78,10 +78,32 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Builds run on the cluster's shared BuildKit, not the runner's local dind
+      # daemon.
+      #
+      # The dind bridge in the runner pod is MTU 1500 while the pod network is 1450,
+      # so packets larger than 1450 bytes are black-holed inside build containers:
+      # bulk transfers stall and then reset after roughly 150s. Measured here - the
+      # same GitHub fetch that hung for 80s inside dind completed in 2.4s on the
+      # cluster BuildKit, which runs on the cluster's own network. The endpoint is
+      # derived from the pod's own namespace, so it follows the runner lane, and
+      # buildkitd-ingress allows every lane's pods (app.kubernetes.io/part-of =
+      # github-actions-runners) to reach it.
+      #
+      # An unreachable builder fails the build rather than silently falling back to
+      # dind, which would reintroduce exactly that flakiness.
+      - name: Register the cluster BuildKit builder
+        run: |
+          set -euo pipefail
+          endpoint="tcp://buildkitd.${NAMESPACE}.svc.cluster.local:1234"
+          echo "BuildKit endpoint: $endpoint"
+          docker buildx create --name haakco-buildkit --driver remote "$endpoint" >/dev/null 2>&1 || true
+          docker buildx inspect --bootstrap haakco-buildkit
+
       - name: Build (check only, no push)
         if: ${{ github.event_name == 'pull_request' || inputs.check_only == true }}
         run: |
-          docker buildx build \
+          docker buildx build --builder haakco-buildkit \
             --pull \
             --load \
             --file ./docker_build/Dockerfile \
@@ -115,7 +137,7 @@ jobs:
             [ -n "$tag" ] && TAG_ARGS+=(--tag "$tag")
           done <<< "$DOCKER_TAGS"
 
-          docker buildx build \
+          docker buildx build --builder haakco-buildkit \
             --pull \
             --push \
             --file ./docker_build/Dockerfile \
