@@ -43,7 +43,16 @@ RUN npm install -g "playwright@${PLAYWRIGHT_VERSION}" \
 # layer pulls newer upstream releases between base rebuilds. opencode's
 # self-update is best-effort — `|| true` keeps the build passing if upstream is
 # briefly unreachable or interactive.
-RUN npm install -g @google/gemini-cli @openai/codex \
+#
+# The github_token mount is what authenticates the GitHub API calls this layer
+# makes. A Dockerfile RUN does not inherit the runner's HAAKCO_GITHUB_TOKEN, so
+# without the mount anything here that resolves a release through api.github.com
+# calls anonymously and shares the estate's 60-requests-per-hour-per-IP budget - the
+# failure mode that stopped the base image publishing from 2026-09-17 to 2026-09-25.
+# The workflow passes the same secret in as --secret id=github_token.
+RUN --mount=type=secret,id=github_token \
+    export GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" \
+    && npm install -g @google/gemini-cli @openai/codex \
     && (opencode upgrade || true) \
     && npm cache clean --force \
     && rm -rf /root/.npm \

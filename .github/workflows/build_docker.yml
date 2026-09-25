@@ -84,6 +84,39 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The runner exports HAAKCO_GITHUB_TOKEN from the github-token Secret in the
+      # github-actions namespace (terraform/tf-home/032_github_actions, sourced from
+      # Infisical /registry). Nothing in this repository can read that secret, so the
+      # credential is verified here instead of assumed: an unauthenticated GitHub call
+      # shares the estate's 60-requests-per-hour-per-IP budget, and the base image went
+      # eight days without publishing (2026-09-17 to 2026-09-25) because that failure
+      # surfaced only as a 403 inside one unrelated build layer.
+      #
+      # This gates the workflow, not the build steps: a Dockerfile RUN does not inherit
+      # the runner environment, so every layer that talks to GitHub must also mount the
+      # github_token build secret - see the CLI refresh layer in this image's Dockerfile.
+      - name: Verify GitHub authentication
+        run: |
+          set -euo pipefail
+          if [ -z "${HAAKCO_GITHUB_TOKEN:-}" ]; then
+            echo "HAAKCO_GITHUB_TOKEN is not set on this runner; its owner is terraform/tf-home/032_github_actions" >&2
+            exit 1
+          fi
+          limit="$(curl -fsS -H "Authorization: Bearer ${HAAKCO_GITHUB_TOKEN}" \
+            https://api.github.com/rate_limit \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["rate"]["limit"])' 2>/dev/null)" || limit=""
+          case "${limit}" in
+            ''|*[!0-9]*)
+              echo "GitHub API did not answer as an authenticated caller (limit=${limit:-none})" >&2
+              exit 1
+              ;;
+          esac
+          if [ "${limit}" -lt 1000 ]; then
+            echo "GitHub API is on the anonymous budget: ${limit} requests/hour" >&2
+            exit 1
+          fi
+          echo "GitHub API authenticated: ${limit} requests/hour"
+
       # Builds run on the cluster's shared BuildKit, not the runner's local dind
       # daemon.
       #
