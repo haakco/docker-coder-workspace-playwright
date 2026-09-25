@@ -97,7 +97,9 @@ jobs:
       # github_token build secret - see the CLI refresh layer in this image's Dockerfile.
       - name: Verify GitHub authentication
         run: |
-          set -euo pipefail
+          # POSIX sh on purpose: this container job's default shell is dash, and only
+          # the base image's workflow pins bash for the whole job.
+          set -eu
           if [ -z "${HAAKCO_GITHUB_TOKEN:-}" ]; then
             echo "HAAKCO_GITHUB_TOKEN is not set on this runner; its owner is terraform/tf-home/032_github_actions" >&2
             exit 1
