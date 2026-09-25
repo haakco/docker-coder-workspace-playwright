@@ -40,53 +40,52 @@ RUN npm install -g "playwright@${PLAYWRIGHT_VERSION}" \
 
 # Refresh LLM coding CLIs to latest. The base image already provides these,
 # but the playwright extender rebuilds independently of the base, so this
-# layer pulls newer upstream releases between base rebuilds. claude/opencode
-# self-update commands are best-effort — `|| true` keeps the build passing
-# if upstream is briefly unreachable or interactive.
+# layer pulls newer upstream releases between base rebuilds. opencode's
+# self-update is best-effort — `|| true` keeps the build passing if upstream is
+# briefly unreachable or interactive.
 RUN npm install -g @google/gemini-cli @openai/codex \
-    && (claude update || true) \
     && (opencode upgrade || true) \
     && npm cache clean --force \
     && rm -rf /root/.npm \
     && gemini --version \
     && codex --version \
-    && claude --version \
     && opencode --version
 
 # Per-user LLM updater. Installs npm tools into ~/.local (shadowing the
-# system installs via PATH order) and runs the built-in self-updaters for
-# claude/opencode. No sudo required. Run inside any workspace as `llmUpdate`.
+# system installs via PATH order) and runs opencode's built-in self-updater.
+# No sudo required. Run inside any workspace as `llmUpdate`.
 COPY <<'LLMUPDATE' /usr/local/bin/llmUpdate
 #!/usr/bin/env bash
 # llmUpdate — refresh per-user installs of the LLM coding CLIs.
 #
 # npm tools install into ~/.local so updates persist on the home PVC and
 # shadow the system versions on PATH (~/.local/bin is ahead of /usr/bin
-# in the workspace shell init). claude/opencode self-update via their
-# built-in commands.
+# in the workspace shell init). opencode self-updates via its built-in command.
 set -euo pipefail
 
 PREFIX="${HOME}/.local"
 mkdir -p "${PREFIX}/bin"
 
 # Explicit --registry so the install routes through the HaakCo Verdaccio cache
-# even if the user has a ~/.npmrc that overrides /etc/npmrc.
-REGISTRY="https://verdaccio.k8.haak.co/"
+# even if the user has a ~/.npmrc that overrides /etc/npmrc. NPM_CONFIG_REGISTRY
+# lets the caller name its own cluster's cache; the fallback is the production
+# hostname, which is the only one reachable from both fleets.
+REGISTRY="${NPM_CONFIG_REGISTRY:-https://verdaccio.k8.haak.co/}"
 echo "==> npm install --prefix ${PREFIX} --registry ${REGISTRY} -g @google/gemini-cli @openai/codex"
 npm install --prefix "${PREFIX}" --registry "${REGISTRY}" -g @google/gemini-cli @openai/codex
 
-echo "==> claude update"
-claude update || echo "  (claude update returned non-zero; check manually)"
-
 echo "==> opencode upgrade"
 opencode upgrade || echo "  (opencode upgrade returned non-zero; check manually)"
+
+echo "==> piUpdate"
+piUpdate
 
 echo
 echo "Versions after update:"
 printf "  gemini   %s\n" "$(gemini --version 2>/dev/null || echo '?')"
 printf "  codex    %s\n" "$(codex --version 2>/dev/null || echo '?')"
-printf "  claude   %s\n" "$(claude --version 2>/dev/null || echo '?')"
 printf "  opencode %s\n" "$(opencode --version 2>/dev/null || echo '?')"
+printf "  pi       %s\n" "$(pi --version 2>/dev/null || echo '?')"
 LLMUPDATE
 RUN chmod +x /usr/local/bin/llmUpdate
 
