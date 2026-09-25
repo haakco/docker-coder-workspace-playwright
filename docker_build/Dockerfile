@@ -63,15 +63,14 @@ mkdir -p "${PREFIX}/bin"
 # lets the caller name its own cluster's cache; the fallback is the production
 # hostname, which is the only one reachable from both fleets.
 REGISTRY="${NPM_CONFIG_REGISTRY:-https://verdaccio.k8.haak.co/}"
-echo "==> npm install --prefix ${PREFIX} --registry ${REGISTRY} -g @google/gemini-cli @openai/codex"
-npm install --prefix "${PREFIX}" --registry "${REGISTRY}" -g @google/gemini-cli @openai/codex
+echo "==> npm install --prefix ${PREFIX} --registry ${REGISTRY} -g @openai/codex"
+npm install --prefix "${PREFIX}" --registry "${REGISTRY}" -g @openai/codex
 
 echo "==> piUpdate"
 piUpdate
 
 echo
 echo "Versions after update:"
-printf "  gemini   %s\n" "$(gemini --version 2>/dev/null || echo '?')"
 printf "  codex    %s\n" "$(codex --version 2>/dev/null || echo '?')"
 printf "  pi       %s\n" "$(pi --version 2>/dev/null || echo '?')"
 LLMUPDATE

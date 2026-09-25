@@ -20,7 +20,7 @@ workspaces and not duplicated into each `/home/coder` PVC.
 - All OS-level browser dependencies (`--with-deps`): libnss3, libgtk-4-1,
   libasound2t64, libxkbcommon0, etc.
 - `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright` exported for every shell
-- **Agent CLIs come from the base image**, which installs Pi, Codex and Gemini into
+- **Agent CLIs come from the base image**, which installs Pi and Codex into
   `/opt/agents`. This extender deliberately does not reinstall them: it is rebuilt on
   the same nightly schedule as the base, so a second install only added a moving part
   (and the `opencode upgrade` it carried blocked on an interactive prompt).
@@ -32,10 +32,9 @@ Run `llmUpdate` inside the workspace shell:
 
 ```bash
 $ llmUpdate
-==> npm install --prefix /home/coder/.local -g @google/gemini-cli @openai/codex
+==> npm install --prefix /home/coder/.local -g @openai/codex
 ==> piUpdate
 Versions after update:
-  gemini   X.Y.Z
   codex    X.Y.Z
   pi       X.Y.Z
 ```
