@@ -38,38 +38,21 @@ RUN npm install -g "playwright@${PLAYWRIGHT_VERSION}" \
     && npm cache clean --force \
     && rm -rf /var/lib/apt/lists/* /tmp/* /root/.npm
 
-# Refresh LLM coding CLIs to latest. The base image already provides these,
-# but the playwright extender rebuilds independently of the base, so this
-# layer pulls newer upstream releases between base rebuilds. opencode's
-# self-update is best-effort — `|| true` keeps the build passing if upstream is
-# briefly unreachable or interactive.
-#
-# The github_token mount is what authenticates the GitHub API calls this layer
-# makes. A Dockerfile RUN does not inherit the runner's HAAKCO_GITHUB_TOKEN, so
-# without the mount anything here that resolves a release through api.github.com
-# calls anonymously and shares the estate's 60-requests-per-hour-per-IP budget - the
-# failure mode that stopped the base image publishing from 2026-09-17 to 2026-09-25.
-# The workflow passes the same secret in as --secret id=github_token.
-RUN --mount=type=secret,id=github_token \
-    export GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" \
-    && npm install -g @google/gemini-cli @openai/codex \
-    && (opencode upgrade || true) \
-    && npm cache clean --force \
-    && rm -rf /root/.npm \
-    && gemini --version \
-    && codex --version \
-    && opencode --version
+# The agent CLIs are not installed here. The base image installs Pi, Codex and Gemini
+# into /opt/agents, and this extender is rebuilt on the same nightly schedule, so a
+# second install only added a moving part - and the `opencode upgrade` it carried
+# blocked on an interactive prompt. Versions come from the base image; `llmUpdate`
+# below is the in-workspace route to something newer.
 
-# Per-user LLM updater. Installs npm tools into ~/.local (shadowing the
-# system installs via PATH order) and runs opencode's built-in self-updater.
-# No sudo required. Run inside any workspace as `llmUpdate`.
+# Per-user LLM updater. Installs the npm CLIs into ~/.local, which shadows the image's
+# copies in /opt/agents by PATH order, so updates persist on the home PVC. No sudo
+# required. Run inside any workspace as `llmUpdate`.
 COPY <<'LLMUPDATE' /usr/local/bin/llmUpdate
 #!/usr/bin/env bash
 # llmUpdate — refresh per-user installs of the LLM coding CLIs.
 #
-# npm tools install into ~/.local so updates persist on the home PVC and
-# shadow the system versions on PATH (~/.local/bin is ahead of /usr/bin
-# in the workspace shell init). opencode self-updates via its built-in command.
+# npm tools install into ~/.local so updates persist on the home PVC and shadow the
+# image's copies in /opt/agents (~/.local/bin is ahead of /opt/agents/bin on PATH).
 set -euo pipefail
 
 PREFIX="${HOME}/.local"
@@ -83,9 +66,6 @@ REGISTRY="${NPM_CONFIG_REGISTRY:-https://verdaccio.k8.haak.co/}"
 echo "==> npm install --prefix ${PREFIX} --registry ${REGISTRY} -g @google/gemini-cli @openai/codex"
 npm install --prefix "${PREFIX}" --registry "${REGISTRY}" -g @google/gemini-cli @openai/codex
 
-echo "==> opencode upgrade"
-opencode upgrade || echo "  (opencode upgrade returned non-zero; check manually)"
-
 echo "==> piUpdate"
 piUpdate
 
@@ -93,7 +73,6 @@ echo
 echo "Versions after update:"
 printf "  gemini   %s\n" "$(gemini --version 2>/dev/null || echo '?')"
 printf "  codex    %s\n" "$(codex --version 2>/dev/null || echo '?')"
-printf "  opencode %s\n" "$(opencode --version 2>/dev/null || echo '?')"
 printf "  pi       %s\n" "$(pi --version 2>/dev/null || echo '?')"
 LLMUPDATE
 RUN chmod +x /usr/local/bin/llmUpdate

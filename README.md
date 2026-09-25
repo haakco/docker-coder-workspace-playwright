@@ -20,10 +20,10 @@ workspaces and not duplicated into each `/home/coder` PVC.
 - All OS-level browser dependencies (`--with-deps`): libnss3, libgtk-4-1,
   libasound2t64, libxkbcommon0, etc.
 - `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright` exported for every shell
-- **LLM CLIs refreshed to latest at build time**: `@google/gemini-cli`,
-  `@openai/codex`, `claude` (self-update), `opencode` (self-update). The
-  base image already installs these; this layer ensures the playwright
-  extender ships current versions between base rebuilds.
+- **Agent CLIs come from the base image**, which installs Pi, Codex and Gemini into
+  `/opt/agents`. This extender deliberately does not reinstall them: it is rebuilt on
+  the same nightly schedule as the base, so a second install only added a moving part
+  (and the `opencode upgrade` it carried blocked on an interactive prompt).
 - **`llmUpdate` script** in `/usr/local/bin` — see below.
 
 ## Updating LLM CLIs in a running workspace
@@ -33,20 +33,19 @@ Run `llmUpdate` inside the workspace shell:
 ```bash
 $ llmUpdate
 ==> npm install --prefix /home/coder/.local -g @google/gemini-cli @openai/codex
-==> claude update
-==> opencode upgrade
+==> piUpdate
 Versions after update:
   gemini   X.Y.Z
   codex    X.Y.Z
-  claude   X.Y.Z
-  opencode X.Y.Z
+  pi       X.Y.Z
 ```
 
-The npm tools install into `~/.local`, which is on PATH **before** `/usr/bin`
-(set in the base image's `.zshrc`/`.bashrc`), so the per-user versions
-shadow the system-baked ones. No sudo is required, and the installs
-persist on the home PVC across pod restarts. `claude update` and
-`opencode upgrade` use each CLI's built-in self-updater.
+The npm tools install into `~/.local`, which is on PATH **before** `/opt/agents/bin`
+(set in the base image's `.zshrc`/`.bashrc`), so the per-user versions shadow the
+image-baked ones. No sudo is required, and the installs persist on the home PVC across
+pod restarts. The workspace startup script gives the home that writable copy on first
+start by copying `/opt/agents`, so `llmUpdate` only has to run when you want something
+newer than the image ships.
 
 ## Using it from a project
 
