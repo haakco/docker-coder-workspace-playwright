@@ -16,6 +16,15 @@ ARG BASE_IMAGE_VERSION=latest
 
 FROM ${BASE_IMAGE_NAME}:${BASE_IMAGE_VERSION}
 
+ARG APT_PROXY=""
+ARG NPM_CONFIG_REGISTRY
+USER root
+RUN rm -f /etc/apt/apt.conf.d/00apt-cacher-ng && \
+    if [ -n "$APT_PROXY" ]; then \
+      printf 'Acquire::http::Proxy "%s";\nAcquire::https::Proxy "%s";\n' \
+        "$APT_PROXY" "$APT_PROXY" > /etc/apt/apt.conf.d/00apt-cacher-ng; \
+    fi
+
 # Pin Playwright at build time. `latest` keeps the weekly rebuild fresh; pass a
 # specific version (e.g. PLAYWRIGHT_VERSION=1.55.0) at build time to lock it.
 ARG PLAYWRIGHT_VERSION=latest
@@ -60,9 +69,8 @@ mkdir -p "${PREFIX}/bin"
 
 # Explicit --registry so the install routes through the HaakCo Verdaccio cache
 # even if the user has a ~/.npmrc that overrides /etc/npmrc. NPM_CONFIG_REGISTRY
-# lets the caller name its own cluster's cache; the fallback is the production
-# hostname, which is the only one reachable from both fleets.
-REGISTRY="${NPM_CONFIG_REGISTRY:-https://verdaccio.k8.haak.co/}"
+# lets the caller name its own cluster's cache; otherwise use npm configuration.
+REGISTRY="${NPM_CONFIG_REGISTRY:-$(npm config get registry)}"
 echo "==> npm install --prefix ${PREFIX} --registry ${REGISTRY} -g @openai/codex"
 npm install --prefix "${PREFIX}" --registry "${REGISTRY}" -g @openai/codex
 
@@ -75,6 +83,8 @@ printf "  codex    %s\n" "$(codex --version 2>/dev/null || echo '?')"
 printf "  pi       %s\n" "$(pi --version 2>/dev/null || echo '?')"
 LLMUPDATE
 RUN chmod +x /usr/local/bin/llmUpdate
+
+RUN rm -f /etc/apt/apt.conf.d/00apt-cacher-ng
 
 USER coder
 WORKDIR /home/coder

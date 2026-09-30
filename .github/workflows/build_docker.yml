@@ -147,7 +147,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request' || inputs.check_only == true }}
         run: |
           # amd64 explicitly - see the publish step below for why.
-          docker buildx build \
+          buildx-build.sh \
             --secret id=github_token,env=HAAKCO_GITHUB_TOKEN \
             --pull \
             --platform linux/amd64 \
@@ -170,7 +170,7 @@ jobs:
           # amd64 explicitly: the Coder templates that consume this image run on
           # amd64 nodes, and with no --platform the published manifest is
           # whatever node buildx happened to pick.
-          docker buildx build \
+          buildx-build.sh \
             --secret id=github_token,env=HAAKCO_GITHUB_TOKEN \
             --pull \
             --platform linux/amd64 \
