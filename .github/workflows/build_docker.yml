@@ -146,9 +146,11 @@ jobs:
       - name: Build (check only, no push)
         if: ${{ github.event_name == 'pull_request' || inputs.check_only == true }}
         run: |
+          # amd64 explicitly - see the publish step below for why.
           docker buildx build \
             --secret id=github_token,env=HAAKCO_GITHUB_TOKEN \
             --pull \
+            --platform linux/amd64 \
             --output type=cacheonly \
             --file ./docker_build/Dockerfile \
             --build-arg BASE_IMAGE_NAME=ghcr.io/haakco/coder-workspace \
@@ -165,9 +167,13 @@ jobs:
             [ -n "$tag" ] && TAG_ARGS+=(--tag "$tag")
           done <<< "$DOCKER_TAGS"
 
+          # amd64 explicitly: the Coder templates that consume this image run on
+          # amd64 nodes, and with no --platform the published manifest is
+          # whatever node buildx happened to pick.
           docker buildx build \
             --secret id=github_token,env=HAAKCO_GITHUB_TOKEN \
             --pull \
+            --platform linux/amd64 \
             --push \
             --file ./docker_build/Dockerfile \
             --build-arg BASE_IMAGE_NAME=ghcr.io/haakco/coder-workspace \
