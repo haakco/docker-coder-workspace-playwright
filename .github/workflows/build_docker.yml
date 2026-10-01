@@ -200,10 +200,13 @@ jobs:
           set -euo pipefail
           digest="$(jq -er '."containerimage.digest" | select(test("^sha256:[0-9a-f]{64}$"))' \
             "$RUNNER_TEMP/published-image.json")"
-          image="ghcr-cache.hk8.haak.co/haakco/coder-workspace-playwright@$digest"
+          registry="ghcr.ghcr-cache.svc.cluster.local:5000"
+          image="$registry/haakco/coder-workspace-playwright@$digest"
           echo "Warming Home GHCR cache: $image"
           # A pull-through cache cannot accept pushes. Fetch every amd64 layer
           # by the build's immutable digest; discard the tar without loading Docker.
           started=$SECONDS
-          regctl image export --platform linux/amd64 "$image" >/dev/null
+          # Runners are in Home; use the existing HTTP service inside the cluster.
+          regctl --host "reg=$registry,tls=disabled" \
+            image export --platform linux/amd64 "$image" >/dev/null
           echo "Home GHCR cache warmed in $((SECONDS - started))s: $image"
