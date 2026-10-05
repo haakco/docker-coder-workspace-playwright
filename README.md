@@ -20,6 +20,11 @@ workspaces and not duplicated into each `/home/coder` PVC.
 - All OS-level browser dependencies (`--with-deps`): libnss3, libgtk-4-1,
   libasound2t64, libxkbcommon0, etc.
 - `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright` exported for every shell
+- `@playwright/mcp@0.0.83` installed at `/opt/playwright-mcp`, together with
+  the Chrome for Testing revision required by its bundled Playwright.
+  The image seeds Pi's MCP entry with the installed executable and
+  `--headless --isolated --browser chromium --no-sandbox`; it does not fetch
+  a newer MCP server at workspace startup. PHP inherits this setup.
 - **Agent CLIs come from the base image**, which installs Pi and Codex into
   `/opt/agents`. This extender deliberately does not reinstall them: it is rebuilt on
   the same nightly schedule as the base, so a second install only added a moving part
@@ -64,6 +69,23 @@ npx playwright test
 ```
 
 ## Build
+
+The build runs `node /usr/local/lib/smoke-playwright-mcp.cjs` as `coder`.
+It starts the exact image-seeded MCP command over stdio, navigates to a local
+test page, checks its title and closes the browser. `PLAYWRIGHT_MCP_SMOKE_OK`
+includes the check duration. Missing browsers, dependencies or incompatible
+launch settings fail the build before publication.
+
+Run the same build checks without publishing:
+
+```bash
+docker buildx build --platform linux/amd64 --output type=cacheonly \
+  --progress plain --file docker_build/Dockerfile .
+```
+
+Update `PLAYWRIGHT_MCP_VERSION` deliberately when upgrading the MCP server;
+its `install-browser` command provisions the matching browser in the same build.
+Project test Playwright versions remain independent of the MCP installation.
 
 Pushes to `main` touching `docker_build/**` or the workflow itself
 automatically rebuild and push via

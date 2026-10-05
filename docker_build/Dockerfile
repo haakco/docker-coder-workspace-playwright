@@ -28,6 +28,9 @@ RUN rm -f /etc/apt/apt.conf.d/00apt-cacher-ng && \
 # Pin Playwright at build time. `latest` keeps the weekly rebuild fresh; pass a
 # specific version (e.g. PLAYWRIGHT_VERSION=1.55.0) at build time to lock it.
 ARG PLAYWRIGHT_VERSION=latest
+# MCP carries its own Playwright version. Install its matching browser in the
+# same build; a runtime @latest download can require a browser this image lacks.
+ARG PLAYWRIGHT_MCP_VERSION=0.0.83
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     PLAYWRIGHT_SKIP_BROWSER_GC=1
@@ -38,14 +41,28 @@ USER root
 # pulls every apt package the browsers need (libnss3, libgtk, libasound, etc).
 # The browser CDN is intermittently flaky, so retry the download a few times.
 RUN npm install -g "playwright@${PLAYWRIGHT_VERSION}" \
+    && npm install -g --prefix /opt/playwright-mcp "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}" \
     && mkdir -p "${PLAYWRIGHT_BROWSERS_PATH}" \
     && (npx --yes playwright install --with-deps chromium firefox webkit \
         || (sleep 15 && npx --yes playwright install --with-deps chromium firefox webkit) \
         || (sleep 30 && npx --yes playwright install --with-deps chromium firefox webkit)) \
+    && /opt/playwright-mcp/bin/playwright-mcp install-browser --with-deps chrome-for-testing \
     && chown -R 1000:1000 "${PLAYWRIGHT_BROWSERS_PATH}" \
     && chmod -R u+rwx,go+rx "${PLAYWRIGHT_BROWSERS_PATH}" \
     && npm cache clean --force \
     && rm -rf /var/lib/apt/lists/* /tmp/* /root/.npm
+
+# The base image's generic MCP entry targets branded Chrome. These images own
+# the container defaults; update both the fresh home and the persistent-home seed.
+RUN for config in /home/coder/.pi/agent/mcp.json /etc/coder-skel/.pi/agent/mcp.json; do \
+      jq '.mcpServers.playwright = {command: "/opt/playwright-mcp/bin/playwright-mcp", \
+        args: ["--headless", "--isolated", "--browser", "chromium", "--no-sandbox"]}' \
+        "$config" > "$config.tmp" \
+      && cat "$config.tmp" > "$config" \
+      && rm "$config.tmp" || exit 1; \
+    done
+
+COPY docker_build/smoke-playwright-mcp.cjs /usr/local/lib/smoke-playwright-mcp.cjs
 
 # The agent CLIs are not installed here. The base image installs Pi, Codex and Gemini
 # into /opt/agents, and this extender is rebuilt on the same nightly schedule, so a
@@ -103,6 +120,7 @@ npx --yes playwright --version
 test -d /ms-playwright
 test -n "$(ls -A /ms-playwright)"
 test -f /etc/coder-skel/.pi/agent/settings.json
+node /usr/local/lib/smoke-playwright-mcp.cjs
 echo SMOKE_OK
 EOF
 
