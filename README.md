@@ -36,20 +36,15 @@ workspaces and not duplicated into each `/home/coder` PVC.
 Run `llmUpdate` inside the workspace shell:
 
 ```bash
-$ llmUpdate
-==> npm install --prefix /home/coder/.local -g @openai/codex
-==> piUpdate
-Versions after update:
-  codex    X.Y.Z
-  pi       X.Y.Z
+llmUpdate
 ```
 
-The npm tools install into `~/.local`, which is on PATH **before** `/opt/agents/bin`
-(set in the base image's `.zshrc`/`.bashrc`), so the per-user versions shadow the
-image-baked ones. No sudo is required, and the installs persist on the home PVC across
-pod restarts. The workspace startup script gives the home that writable copy on first
-start by copying `/opt/agents`, so `llmUpdate` only has to run when you want something
-newer than the image ships.
+Codex uses the official `https://chatgpt.com/codex/install.sh` installer and Pi
+uses the official `https://pi.dev/install.sh` managed installation. Shared Coder
+startup installs or migrates each CLI independently in the persistent home.
+`~/.local/bin` and `~/.pi/agent/bin` precede the image baseline on PATH.
+`llmUpdate` refreshes Codex, then calls `piUpdate` to update Pi and its extensions.
+No sudo is required; profile installs survive Pod replacements.
 
 ## Using it from a project
 

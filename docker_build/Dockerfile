@@ -64,40 +64,20 @@ RUN for config in /home/coder/.pi/agent/mcp.json /etc/coder-skel/.pi/agent/mcp.j
 
 COPY docker_build/smoke-playwright-mcp.cjs /usr/local/lib/smoke-playwright-mcp.cjs
 
-# The agent CLIs are not installed here. The base image installs Pi, Codex and Gemini
-# into /opt/agents, and this extender is rebuilt on the same nightly schedule, so a
-# second install only added a moving part - and the `opencode upgrade` it carried
-# blocked on an interactive prompt. Versions come from the base image; `llmUpdate`
-# below is the in-workspace route to something newer.
-
-# Per-user LLM updater. Installs the npm CLIs into ~/.local, which shadows the image's
-# copies in /opt/agents by PATH order, so updates persist on the home PVC. No sudo
-# required. Run inside any workspace as `llmUpdate`.
+# Agent baselines come from the base image. Updates use managed installs in the
+# persistent user profile, without sudo.
 COPY <<'LLMUPDATE' /usr/local/bin/llmUpdate
 #!/usr/bin/env bash
-# llmUpdate — refresh per-user installs of the LLM coding CLIs.
-#
-# npm tools install into ~/.local so updates persist on the home PVC and shadow the
-# image's copies in /opt/agents (~/.local/bin is ahead of /opt/agents/bin on PATH).
+# Refresh managed user installations of Codex and Pi.
 set -euo pipefail
+export PATH="${HOME}/.local/bin:${HOME}/.pi/agent/bin:${PATH}"
+mkdir -p "${HOME}/.local/share/pi"
 
-PREFIX="${HOME}/.local"
-mkdir -p "${PREFIX}/bin"
-
-# Explicit --registry so the install routes through the HaakCo Verdaccio cache
-# even if the user has a ~/.npmrc that overrides /etc/npmrc. NPM_CONFIG_REGISTRY
-# lets the caller name its own cluster's cache; otherwise use npm configuration.
-REGISTRY="${NPM_CONFIG_REGISTRY:-$(npm config get registry)}"
-echo "==> npm install --prefix ${PREFIX} --registry ${REGISTRY} -g @openai/codex"
-npm install --prefix "${PREFIX}" --registry "${REGISTRY}" -g @openai/codex
-
-echo "==> piUpdate"
+curl -fsSL --connect-timeout 10 --max-time 60 https://chatgpt.com/codex/install.sh \
+  -o "${HOME}/.local/share/pi/codex-install.sh"
+CODEX_NON_INTERACTIVE=1 timeout 5m sh "${HOME}/.local/share/pi/codex-install.sh" </dev/null
+"${HOME}/.local/bin/codex" --version
 piUpdate
-
-echo
-echo "Versions after update:"
-printf "  codex    %s\n" "$(codex --version 2>/dev/null || echo '?')"
-printf "  pi       %s\n" "$(pi --version 2>/dev/null || echo '?')"
 LLMUPDATE
 RUN chmod +x /usr/local/bin/llmUpdate
 
