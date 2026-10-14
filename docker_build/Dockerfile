@@ -81,6 +81,11 @@ piUpdate
 LLMUPDATE
 RUN chmod +x /usr/local/bin/llmUpdate
 
+# The shared project bootstrap can skip apt browser dependencies after the
+# image has installed and smoke-tested them. Browser revisions remain project-owned.
+RUN mkdir -p /etc/haakco-coder \
+    && printf '%s\n' browser-system-deps >> /etc/haakco-coder/image-capabilities
+
 RUN rm -f /etc/apt/apt.conf.d/00apt-cacher-ng
 
 USER coder
@@ -97,6 +102,7 @@ node --version
 corepack --version
 pi --version
 npx --yes playwright --version
+grep -qx browser-system-deps /etc/haakco-coder/image-capabilities
 test -d /ms-playwright
 test -n "$(ls -A /ms-playwright)"
 test -f /etc/coder-skel/.pi/agent/settings.json
