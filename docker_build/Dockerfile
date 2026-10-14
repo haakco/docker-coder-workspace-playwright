@@ -37,16 +37,24 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
 
 USER root
 
-# Install Playwright globally and its browsers + OS-level deps. `--with-deps`
-# pulls every apt package the browsers need (libnss3, libgtk, libasound, etc).
-# The browser CDN is intermittently flaky, so retry the download a few times.
+# Keep package/dependency installation separate from browser downloads so a CDN
+# failure retains completed apt work. Playwright retries downloads internally.
 RUN npm install -g "playwright@${PLAYWRIGHT_VERSION}" \
     && npm install -g --prefix /opt/playwright-mcp "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}" \
-    && mkdir -p "${PLAYWRIGHT_BROWSERS_PATH}" \
-    && (npx --yes playwright install --with-deps chromium firefox webkit \
-        || (sleep 15 && npx --yes playwright install --with-deps chromium firefox webkit) \
-        || (sleep 30 && npx --yes playwright install --with-deps chromium firefox webkit)) \
-    && /opt/playwright-mcp/bin/playwright-mcp install-browser --with-deps chrome-for-testing \
+    && timeout --kill-after=15s 5m npx --yes playwright install-deps chromium firefox webkit \
+    && rm -rf /var/lib/apt/lists/*
+
+# The default Firefox redirect trickled at ~30 KiB/s on 2026-10-14 while the
+# publisher's direct CDN served a bounded probe at ~740 KiB/s. The supported
+# per-browser override selects that same release from the official direct host.
+# DOWNLOAD_CONNECTION_TIMEOUT is idle-only; the outer timeout bounds trickles.
+RUN mkdir -p "${PLAYWRIGHT_BROWSERS_PATH}" \
+    && timeout --kill-after=15s 5m env \
+       PLAYWRIGHT_FIREFOX_DOWNLOAD_HOST=https://cdn.playwright.dev \
+       npx --yes playwright install chromium firefox webkit
+
+RUN timeout --kill-after=15s 5m \
+       /opt/playwright-mcp/bin/playwright-mcp install-browser --with-deps chrome-for-testing \
     && chown -R 1000:1000 "${PLAYWRIGHT_BROWSERS_PATH}" \
     && chmod -R u+rwx,go+rx "${PLAYWRIGHT_BROWSERS_PATH}" \
     && npm cache clean --force \
