@@ -44,14 +44,20 @@ RUN npm install -g "playwright@${PLAYWRIGHT_VERSION}" \
     && timeout --kill-after=15s 5m npx --yes playwright install-deps chromium firefox webkit \
     && rm -rf /var/lib/apt/lists/*
 
-# The default Firefox redirect trickled at ~30 KiB/s on 2026-10-14 while the
-# publisher's direct CDN served a bounded probe at ~740 KiB/s. The supported
-# per-browser override selects that same release from the official direct host.
+# On 2026-10-14 the default Firefox/WebKit redirects trickled at ~30 KiB/s.
+# The official direct host completed Firefox in 26s. Keep each browser in its
+# own layer so a failed download retains the other completed browsers.
 # DOWNLOAD_CONNECTION_TIMEOUT is idle-only; the outer timeout bounds trickles.
 RUN mkdir -p "${PLAYWRIGHT_BROWSERS_PATH}" \
-    && timeout --kill-after=15s 5m env \
+    && timeout --kill-after=15s 5m npx --yes playwright install chromium
+
+RUN timeout --kill-after=15s 7m env \
        PLAYWRIGHT_FIREFOX_DOWNLOAD_HOST=https://cdn.playwright.dev \
-       npx --yes playwright install chromium firefox webkit
+       npx --yes playwright install firefox
+
+RUN timeout --kill-after=15s 5m env \
+       PLAYWRIGHT_WEBKIT_DOWNLOAD_HOST=https://cdn.playwright.dev \
+       npx --yes playwright install webkit
 
 RUN timeout --kill-after=15s 5m \
        /opt/playwright-mcp/bin/playwright-mcp install-browser --with-deps chrome-for-testing \
