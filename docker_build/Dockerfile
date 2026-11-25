@@ -30,7 +30,7 @@ RUN rm -f /etc/apt/apt.conf.d/00apt-cacher-ng && \
 ARG PLAYWRIGHT_VERSION=latest
 # MCP carries its own Playwright version. Install its matching browser in the
 # same build; a runtime @latest download can require a browser this image lacks.
-ARG PLAYWRIGHT_MCP_VERSION=0.0.83
+ARG PLAYWRIGHT_MCP_VERSION=0.0.86
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     PLAYWRIGHT_SKIP_BROWSER_GC=1

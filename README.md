@@ -20,7 +20,7 @@ workspaces and not duplicated into each `/home/coder` PVC.
 - All OS-level browser dependencies (`--with-deps`): libnss3, libgtk-4-1,
   libasound2t64, libxkbcommon0, etc.
 - `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright` exported for every shell
-- `@playwright/mcp@0.0.83` installed at `/opt/playwright-mcp`, together with
+- `@playwright/mcp@0.0.86` installed at `/opt/playwright-mcp`, together with
   the Chrome for Testing revision required by its bundled Playwright.
   The image seeds Pi's MCP entry with the installed executable and
   `--headless --isolated --browser chromium --no-sandbox`; it does not fetch
